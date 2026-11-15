@@ -82,6 +82,11 @@ fi
 #     String containing the source/target device firmware to use in the format of "Model number/CSC/IMEI".
 #     IMEI number is necessary to fetch the firmware from FUS, alternatively the device serial number can be used.
 #
+#   [SOURCE/TARGET]_FIRMWARE_VERSION
+#     Optional exact firmware version in PDA/CSC/MODEM format. Defaults to "latest".
+#     Pin this when newer stock firmware uses an incompatible Android version.
+#     Existing downloads/extractions must match a pinned version exactly.
+#
 #   [SOURCE/TARGET]_EXTRA_FIRMWARES
 #     If defined, this set of extra devices firmwares will be downloaded/extracted when running `download_fw`/`extract_fw`
 #     along with the ones set in [SOURCE/TARGET]_FIRMWARE.
@@ -473,6 +478,7 @@ fi
     GET_BUILD_VAR "ROM_VERSION"
     GET_BUILD_VAR "ROM_BUILD_TIMESTAMP" "$(date +%s)"
     GET_BUILD_VAR "SOURCE_FIRMWARE"
+    GET_BUILD_VAR "SOURCE_FIRMWARE_VERSION" "latest"
     if [ "${#SOURCE_EXTRA_FIRMWARES[@]}" -ge 1 ]; then
         echo "SOURCE_EXTRA_FIRMWARES=\"$(IFS=":"; printf '%s' "${SOURCE_EXTRA_FIRMWARES[*]}")\""
     else
@@ -490,6 +496,7 @@ fi
         echo "TARGET_ASSERT_MODEL=\"\""
     fi
     GET_BUILD_VAR "TARGET_FIRMWARE"
+    GET_BUILD_VAR "TARGET_FIRMWARE_VERSION" "latest"
     if [ "${#TARGET_EXTRA_FIRMWARES[@]}" -ge 1 ]; then
         echo "TARGET_EXTRA_FIRMWARES=\"$(IFS=":"; printf '%s' "${TARGET_EXTRA_FIRMWARES[*]}")\""
     else

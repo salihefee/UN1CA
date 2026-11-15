@@ -1,0 +1,4 @@
+id=proca_runtime
+name=PROCA startup compatibility
+author=salvogiangri
+description=Remove the stock Process Authenticator startup after the common UN1CA PROCA kernel patch.

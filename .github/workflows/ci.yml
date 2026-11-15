@@ -28,6 +28,23 @@ jobs:
           done < <(find platform scripts target unica -name "*.sh" -not -name "*ssi.sh" -not -name "config.sh" -not -name "sff.sh")
           exit $CODE
 
+      - name: Check firmware version selection
+        run: bash scripts/tests/firmware_versions.sh
+
+      - name: Check target-files cache invalidation
+        run: bash scripts/tests/target_files_cache.sh
+
+      - name: Check thermal policy selection
+        run: bash scripts/tests/thermal_policies.sh
+
+      - name: Check firmware work directory freshness
+        run: bash scripts/tests/work_dir_freshness.sh
+
+      - name: Check vendor service restart policies
+        run: |
+          bash target/dm1q/patches/proca_runtime/tests/run.sh
+          bash target/dm1q/patches/security_services/tests/run.sh
+
   generate-matrix:
     name: Generate matrix
     needs: shellcheck

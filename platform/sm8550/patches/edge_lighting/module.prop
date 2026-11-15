@@ -1,0 +1,4 @@
+id=edge_lighting
+name=Edge lighting patches
+author=salvogiangri
+description=Use the target model for Edge lighting corner radii.

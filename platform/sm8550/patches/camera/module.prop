@@ -1,0 +1,4 @@
+id=camera
+name=S23 camera library compatibility
+author=FSaurenbach, salvogiangri
+description=Use matching stock S23 camera processing libraries and public declarations.

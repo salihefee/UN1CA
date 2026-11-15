@@ -1,0 +1,4 @@
+id=graphics
+name=S23 GameDriver compatibility
+author=salvogiangri
+description=Replace the S22 GameDriver with the stock S23 package selected by vendor.

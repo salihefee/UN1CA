@@ -3,18 +3,40 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # [
-source "$SRC_DIR/scripts/utils/build_utils.sh" || exit 1
+source "$SRC_DIR/scripts/utils/firmware_utils.sh" || exit 1
 
 SOURCE_FIRMWARE_PATH="$(cut -d "/" -f 1 -s <<< "$SOURCE_FIRMWARE")_$(cut -d "/" -f 2 -s <<< "$SOURCE_FIRMWARE")"
 TARGET_FIRMWARE_PATH="$(cut -d "/" -f 1 -s <<< "$TARGET_FIRMWARE")_$(cut -d "/" -f 2 -s <<< "$TARGET_FIRMWARE")"
 
+for ROLE in SOURCE TARGET; do
+    FIRMWARE_VAR="${ROLE}_FIRMWARE"
+    PATH_VAR="${ROLE}_FIRMWARE_PATH"
+    SDK_VAR="${ROLE}_PLATFORM_SDK_VERSION"
+    PIN="$(GET_PINNED_FIRMWARE_VERSION "${!FIRMWARE_VAR}")" || exit 1
+    if [ "$PIN" ]; then
+        MARKER="$FW_DIR/${!PATH_VAR}/.extracted"
+        if [ ! -f "$MARKER" ] || ! FIRMWARE_VERSION_MATCHES "$(cat "$MARKER")" "$PIN"; then
+            LOGE "$ROLE firmware must be extracted from $PIN"
+            exit 1
+        fi
+        ACTUAL_SDK="$(GET_PROP "$FW_DIR/${!PATH_VAR}/system/system/build.prop" "ro.build.version.sdk")"
+        if [[ "$ACTUAL_SDK" != "${!SDK_VAR}" ]]; then
+            LOGE "$ROLE firmware SDK $ACTUAL_SDK does not match configured SDK ${!SDK_VAR}"
+            exit 1
+        fi
+    fi
+done
+unset ROLE FIRMWARE_VAR PATH_VAR SDK_VAR PIN MARKER ACTUAL_SDK
+
 COPY_SOURCE_FIRMWARE()
 {
+    # Samsung packages reuse timestamps and can retain file sizes between builds.
+    # Compare contents so a cached work directory cannot keep older binaries.
     local SOURCE_FOLDERS="product system"
     for f in $SOURCE_FOLDERS; do
         if [ -d "$FW_DIR/$SOURCE_FIRMWARE_PATH/$f" ]; then
             LOG "- Copying /$f from source firmware"
-            EVAL "rsync -a --mkpath --delete --exclude=\"*system_ext*\" \"$FW_DIR/$SOURCE_FIRMWARE_PATH/$f\" \"$WORK_DIR\"" || exit 1
+            EVAL "rsync -a --checksum --mkpath --delete --exclude=\"*system_ext*\" \"$FW_DIR/$SOURCE_FIRMWARE_PATH/$f\" \"$WORK_DIR\"" || exit 1
             sed "/system_ext/d" "$FW_DIR/$SOURCE_FIRMWARE_PATH/file_context-$f" > "$WORK_DIR/configs/file_context-$f"
             sed "/system_ext/d" "$FW_DIR/$SOURCE_FIRMWARE_PATH/fs_config-$f" > "$WORK_DIR/configs/fs_config-$f"
             if [[ "$f" == "product" ]]; then
@@ -40,7 +62,7 @@ COPY_SOURCE_FIRMWARE()
             [ -L "$WORK_DIR/system/system_ext" ] && rm -f "$WORK_DIR/system/system_ext"
             [ -d "$WORK_DIR/system/system/system_ext" ] && rm -rf "$WORK_DIR/system/system/system_ext"
 
-            EVAL "rsync -a --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system_ext\" \"$WORK_DIR\"" || exit 1
+            EVAL "rsync -a --checksum --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system_ext\" \"$WORK_DIR\"" || exit 1
             mkdir -p "$WORK_DIR/system/system_ext"
             EVAL "ln -sf \"/system_ext\" \"$WORK_DIR/system/system/system_ext\"" || exit 1
             SET_METADATA "system" "system_ext" 0 0 755 "u:object_r:system_file:s0"
@@ -58,7 +80,7 @@ COPY_SOURCE_FIRMWARE()
             [ -f "$WORK_DIR/configs/file_context-system_ext" ] && rm -f "$WORK_DIR/configs/file_context-system_ext"
             [ -f "$WORK_DIR/configs/fs_config-system_ext" ] && rm -f "$WORK_DIR/configs/fs_config-system_ext"
 
-            EVAL "rsync -a --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system_ext\" \"$WORK_DIR/system/system\"" || exit 1
+            EVAL "rsync -a --checksum --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system_ext\" \"$WORK_DIR/system/system\"" || exit 1
             EVAL "ln -sf \"/system/system_ext\" \"$WORK_DIR/system/system_ext\"" || exit 1
             SET_METADATA "system" "system_ext" 0 0 644 "u:object_r:system_file:s0"
             sed "s/^\/system_ext/\/system\/system_ext/g" "$FW_DIR/$SOURCE_FIRMWARE_PATH/file_context-system_ext" >> "$WORK_DIR/configs/file_context-system"
@@ -76,7 +98,7 @@ COPY_SOURCE_FIRMWARE()
             [ -L "$WORK_DIR/system/system_ext" ] && rm -f "$WORK_DIR/system/system_ext"
             [ -d "$WORK_DIR/system/system/system_ext" ] && rm -rf "$WORK_DIR/system/system/system_ext"
 
-            EVAL "rsync -a --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/system_ext\" \"$WORK_DIR\"" || exit 1
+            EVAL "rsync -a --checksum --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/system_ext\" \"$WORK_DIR\"" || exit 1
             mkdir -p "$WORK_DIR/system/system_ext"
             EVAL "ln -sf \"/system_ext\" \"$WORK_DIR/system/system/system_ext\"" || exit 1
             SET_METADATA "system" "system_ext" 0 0 755 "u:object_r:system_file:s0"
@@ -98,7 +120,7 @@ COPY_SOURCE_FIRMWARE()
             [ -f "$WORK_DIR/configs/file_context-system_ext" ] && rm -f "$WORK_DIR/configs/file_context-system_ext"
             [ -f "$WORK_DIR/configs/fs_config-system_ext" ] && rm -f "$WORK_DIR/configs/fs_config-system_ext"
 
-            EVAL "rsync -a --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/system_ext\" \"$WORK_DIR/system/system\"" || exit 1
+            EVAL "rsync -a --checksum --mkpath --delete \"$FW_DIR/$SOURCE_FIRMWARE_PATH/system/system/system_ext\" \"$WORK_DIR/system/system\"" || exit 1
             EVAL "ln -sf \"/system/system_ext\" \"$WORK_DIR/system/system_ext\"" || exit 1
             grep -F "system_ext" "$FW_DIR/$SOURCE_FIRMWARE_PATH/file_context-system" >> "$WORK_DIR/configs/file_context-system"
             grep -F "system_ext" "$FW_DIR/$SOURCE_FIRMWARE_PATH/fs_config-system" >> "$WORK_DIR/configs/fs_config-system"
@@ -114,7 +136,7 @@ COPY_TARGET_FIRMWARE()
     for f in $TARGET_FOLDERS; do
         if [ -d "$FW_DIR/$TARGET_FIRMWARE_PATH/$f" ]; then
             LOG "- Copying /$f from target firmware"
-            EVAL "rsync -a --mkpath --delete \"$FW_DIR/$TARGET_FIRMWARE_PATH/$f\" \"$WORK_DIR\"" || exit 1
+            EVAL "rsync -a --checksum --mkpath --delete \"$FW_DIR/$TARGET_FIRMWARE_PATH/$f\" \"$WORK_DIR\"" || exit 1
             EVAL "cp -a \"$FW_DIR/$TARGET_FIRMWARE_PATH/file_context-$f\" \"$WORK_DIR/configs/file_context-$f\"" || exit 1
             EVAL "cp -a \"$FW_DIR/$TARGET_FIRMWARE_PATH/fs_config-$f\" \"$WORK_DIR/configs/fs_config-$f\"" || exit 1
             if [[ "$f" == "vendor" ]]; then
@@ -139,7 +161,7 @@ COPY_TARGET_KERNEL()
 {
     if [ -d "$FW_DIR/$TARGET_FIRMWARE_PATH/kernel" ]; then
         LOG_STEP_IN "- Copying target firmware kernel images"
-        EVAL "rsync -a --mkpath --delete \"$FW_DIR/$TARGET_FIRMWARE_PATH/kernel\" \"$WORK_DIR\"" || exit 1
+        EVAL "rsync -a --checksum --mkpath --delete \"$FW_DIR/$TARGET_FIRMWARE_PATH/kernel\" \"$WORK_DIR\"" || exit 1
         $TARGET_KEEP_ORIGINAL_SIGN || find "$WORK_DIR/kernel" -mindepth 1 -exec "$SRC_DIR/scripts/unsign_bin.sh" {} \;
         LOG_STEP_OUT
     else

@@ -1,0 +1,1 @@
+is_substring("S911BXX", getprop("ro.boot.bootloader")) || abort("E3003: Unable to verify SM-S911B Samsung firmware.");

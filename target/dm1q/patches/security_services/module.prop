@@ -1,0 +1,4 @@
+id=security_services
+name=Security worker restart policy
+author=UN1CA contributors
+description=Preserves security interfaces while preventing failed initialization workers from respawning indefinitely.

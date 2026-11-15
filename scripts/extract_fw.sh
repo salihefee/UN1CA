@@ -11,6 +11,7 @@ FIRMWARES=()
 MODEL=""
 CSC=""
 LATEST_FIRMWARE=""
+PINNED_FIRMWARE=""
 DOWNLOADED_FIRMWARE=""
 BL_TAR=""
 AP_TAR=""
@@ -349,7 +350,8 @@ PREPARE_SCRIPT "$@"
 for i in "${FIRMWARES[@]}"; do
     PARSE_FIRMWARE_STRING "$i" || exit 1
 
-    LATEST_FIRMWARE="$(GET_LATEST_FIRMWARE "$MODEL" "$CSC")"
+    PINNED_FIRMWARE="$(GET_PINNED_FIRMWARE_VERSION "$i")" || exit 1
+    LATEST_FIRMWARE="${PINNED_FIRMWARE:-$(GET_LATEST_FIRMWARE "$MODEL" "$CSC")}"
     if [ ! "$LATEST_FIRMWARE" ]; then
         LOGE "Latest available firmware could not be fetched"
         exit 1
@@ -363,6 +365,11 @@ for i in "${FIRMWARES[@]}"; do
     LOG_STEP_IN
 
     if ! $FORCE; then
+        if [ "$PINNED_FIRMWARE" ] && [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ] && \
+                ! FIRMWARE_VERSION_MATCHES "$(cat "$FW_DIR/${MODEL}_${CSC}/.extracted")" "$PINNED_FIRMWARE"; then
+            LOGE "Extracted firmware does not match $PINNED_FIRMWARE. Use --force to replace it."
+            exit 1
+        fi
         # Skip if firmware has been extracted
         if [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ]; then
             if ! COMPARE_SEC_BUILD_VERSION "$(cat "$FW_DIR/${MODEL}_${CSC}/.extracted")" "$LATEST_FIRMWARE"; then
@@ -387,10 +394,14 @@ for i in "${FIRMWARES[@]}"; do
         exit 1
     fi
 
+    DOWNLOADED_FIRMWARE="$(cat "$ODIN_DIR/${MODEL}_${CSC}/.downloaded")"
+    if [ "$PINNED_FIRMWARE" ] && ! FIRMWARE_VERSION_MATCHES "$DOWNLOADED_FIRMWARE" "$PINNED_FIRMWARE"; then
+        LOGE "Downloaded firmware does not match $PINNED_FIRMWARE. Download the pinned firmware first."
+        exit 1
+    fi
+
     [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ] && rm -rf "$FW_DIR/${MODEL}_${CSC}"
     mkdir -p "$FW_DIR/${MODEL}_${CSC}"
-
-    DOWNLOADED_FIRMWARE="$(cat "$ODIN_DIR/${MODEL}_${CSC}/.downloaded")"
 
     BL_TAR="$(find "$ODIN_DIR/${MODEL}_${CSC}" -name "BL_$(cut -d "/" -f 1 -s <<< "$DOWNLOADED_FIRMWARE")*.md5" | sort -r | head -n 1)"
     AP_TAR="$(find "$ODIN_DIR/${MODEL}_${CSC}" -name "AP_$(cut -d "/" -f 1 -s <<< "$DOWNLOADED_FIRMWARE")*.md5" | sort -r | head -n 1)"

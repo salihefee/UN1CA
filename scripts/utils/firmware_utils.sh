@@ -5,6 +5,45 @@
 source "$SRC_DIR/scripts/utils/build_utils.sh" || return 1
 # ]
 
+# GET_PINNED_FIRMWARE_VERSION <firmware>
+# Return an optional PDA/CSC/MODEM pin for the configured source or target.
+GET_PINNED_FIRMWARE_VERSION()
+{
+    local VERSION=""
+
+    if [[ "$1" == "$SOURCE_FIRMWARE" ]] && [[ "${SOURCE_FIRMWARE_VERSION:-latest}" != "latest" ]]; then
+        VERSION="$SOURCE_FIRMWARE_VERSION"
+    fi
+    if [[ "$1" == "$TARGET_FIRMWARE" ]] && [[ "${TARGET_FIRMWARE_VERSION:-latest}" != "latest" ]]; then
+        if [ "$VERSION" ] && [[ "$VERSION" != "$TARGET_FIRMWARE_VERSION" ]]; then
+            LOGE "Conflicting firmware version pins for $1"
+            return 1
+        fi
+        VERSION="$TARGET_FIRMWARE_VERSION"
+    fi
+
+    echo "$VERSION"
+}
+
+# GET_FIRMWARE_DOWNLOAD_VERSION <version>
+GET_FIRMWARE_DOWNLOAD_VERSION()
+{
+    local VERSION="$1"
+
+    # BinaryInform requires PDA/CSC/MODEM/PDA, unlike the FOTA version feed.
+    if [[ "$(awk -F / '{print NF}' <<< "$VERSION")" == "3" ]]; then
+        VERSION+="/$(cut -d "/" -f 1 <<< "$VERSION")"
+    fi
+    echo "$VERSION"
+}
+
+# FIRMWARE_VERSION_MATCHES <version> <version>
+# FUS sometimes appends the PDA as a fourth component.
+FIRMWARE_VERSION_MATCHES()
+{
+    [[ "$(cut -d "/" -f 1-3 <<< "$1")" == "$(cut -d "/" -f 1-3 <<< "$2")" ]]
+}
+
 # COMPARE_SEC_BUILD_VERSION <string1> <string2>
 # Returns whether or not `string1` build number is older than `string2`.
 COMPARE_SEC_BUILD_VERSION()

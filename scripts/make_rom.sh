@@ -174,7 +174,9 @@ if $BUILD_TARGET_FILES || $BUILD_FLASHABLE_ZIP; then
     fi
     ZIP_FILE_NAME+="-target_files.zip"
 
-    if [ ! -f "$OUT_DIR/$ZIP_FILE_NAME" ]; then
+    # A preceding --no-target-files build also makes an older archive stale.
+    if $BUILD_ROM || [ ! -f "$OUT_DIR/$ZIP_FILE_NAME" ] || \
+            [ "$WORK_DIR/.completed" -nt "$OUT_DIR/$ZIP_FILE_NAME" ]; then
         LOG_STEP_IN true "Creating target-files zip"
         "$SRC_DIR/scripts/internal/create_target_files_zip.sh" "$OUT_DIR/$ZIP_FILE_NAME" || exit 1
         LOG_STEP_OUT

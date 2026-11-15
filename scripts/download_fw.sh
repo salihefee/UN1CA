@@ -14,6 +14,7 @@ CSC=""
 IMEI=""
 SERIAL_NO=""
 LATEST_FIRMWARE=""
+PINNED_FIRMWARE=""
 ZIP_FILE=""
 
 PREPARE_SCRIPT()
@@ -113,7 +114,8 @@ PREPARE_SCRIPT "$@"
 for i in "${FIRMWARES[@]}"; do
     PARSE_FIRMWARE_STRING "$i" || exit 1
 
-    LATEST_FIRMWARE="$(GET_LATEST_FIRMWARE "$MODEL" "$CSC")"
+    PINNED_FIRMWARE="$(GET_PINNED_FIRMWARE_VERSION "$i")" || exit 1
+    LATEST_FIRMWARE="${PINNED_FIRMWARE:-$(GET_LATEST_FIRMWARE "$MODEL" "$CSC")}"
     if [ ! "$LATEST_FIRMWARE" ]; then
         LOGE "Latest available firmware could not be fetched"
         exit 1
@@ -127,6 +129,22 @@ for i in "${FIRMWARES[@]}"; do
     LOG_STEP_IN
 
     if ! $FORCE; then
+        if [ "$PINNED_FIRMWARE" ]; then
+            # A valid extraction is sufficient even if a different archive was
+            # downloaded later. That archive will not be used by this build.
+            if [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ] && \
+                    FIRMWARE_VERSION_MATCHES "$(cat "$FW_DIR/${MODEL}_${CSC}/.extracted")" "$PINNED_FIRMWARE"; then
+                LOG "\033[0;33m! This firmware has already been extracted, skipping\033[0m"
+                LOG_STEP_OUT; LOG_STEP_OUT
+                continue
+            fi
+            for MARKER in "$FW_DIR/${MODEL}_${CSC}/.extracted" "$ODIN_DIR/${MODEL}_${CSC}/.downloaded"; do
+                if [ -f "$MARKER" ] && ! FIRMWARE_VERSION_MATCHES "$(cat "$MARKER")" "$PINNED_FIRMWARE"; then
+                    LOGE "Cached firmware does not match $PINNED_FIRMWARE. Use --force to replace it."
+                    exit 1
+                fi
+            done
+        fi
         # Skip if firmware has been extracted and equal/newer than the one in FUS
         if [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ]; then
             if COMPARE_SEC_BUILD_VERSION "$(cat "$FW_DIR/${MODEL}_${CSC}/.extracted")" "$LATEST_FIRMWARE"; then
@@ -152,9 +170,14 @@ for i in "${FIRMWARES[@]}"; do
     [ -f "$ODIN_DIR/${MODEL}_${CSC}/.downloaded" ] && rm -rf "$ODIN_DIR/${MODEL}_${CSC}"
     mkdir -p "$ODIN_DIR/${MODEL}_${CSC}"
     # Anan's samloader stores its logs in the current working directory, let's move into OUT_DIR just for this time
+    DOWNLOAD_VERSION_ARGS=()
+    if [ "$PINNED_FIRMWARE" ]; then
+        DOWNLOAD_VERSION_ARGS=(-v "$(GET_FIRMWARE_DOWNLOAD_VERSION "$PINNED_FIRMWARE")")
+    fi
     (
     cd "$OUT_DIR" || exit 1
-    samloader -m "$MODEL" -r "$CSC" -i "$IMEI" -s "$SERIAL_NO" download -O "$ODIN_DIR/${MODEL}_${CSC}" 1> /dev/null || exit 1
+    samloader -m "$MODEL" -r "$CSC" -i "$IMEI" -s "$SERIAL_NO" download \
+        "${DOWNLOAD_VERSION_ARGS[@]}" -O "$ODIN_DIR/${MODEL}_${CSC}" 1> /dev/null || exit 1
     )
 
     ZIP_FILE="$(find "$ODIN_DIR/${MODEL}_${CSC}" -name "*.zip" | sort -r | head -n 1)"
@@ -167,6 +190,21 @@ for i in "${FIRMWARES[@]}"; do
     EVAL "unzip -o \"$ZIP_FILE\" -d \"$ODIN_DIR/${MODEL}_${CSC}\" && rm -rf \"$ZIP_FILE\"" || exit 1
 
     VERIFY_ODIN_PACKAGES
+
+    # FUS may substitute a newer package even when an older version is requested.
+    # Do not label that package as the requested version.
+    if [ "$PINNED_FIRMWARE" ]; then
+        for COMPONENT in "AP:1" "CSC:2" "CP:3"; do
+            PREFIX="${COMPONENT%:*}"
+            VERSION="$(cut -d "/" -f "${COMPONENT#*:}" <<< "$PINNED_FIRMWARE")"
+            PATTERN="${PREFIX}_${VERSION}_*.md5"
+            [[ "$PREFIX" == "CSC" ]] && PATTERN="CSC_*${VERSION}_*.md5"
+            if ! find "$ODIN_DIR/${MODEL}_${CSC}" -maxdepth 1 -name "$PATTERN" -print -quit | grep -q .; then
+                LOGE "Samsung returned a different $PREFIX firmware than $PINNED_FIRMWARE"
+                exit 1
+            fi
+        done
+    fi
 
     echo -n "$LATEST_FIRMWARE" > "$ODIN_DIR/${MODEL}_${CSC}/.downloaded"
 
